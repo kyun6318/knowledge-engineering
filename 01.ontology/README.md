@@ -1,5 +1,7 @@
 # Ontology Schema — 기업-인재 매칭을 위한 Knowledge Graph 설계
 
+> 현재 유효 버전: **v19** (2026-03-11)
+
 ## 이 문서가 다루는 것
 
 채용 도메인에서 **기업(Company)**과 **인재(Candidate)**의 맥락 정보를 구조화하고, 이를 Graph 기반으로 매칭하는 온톨로지 스키마입니다. 단순한 스킬 키워드 매칭을 넘어, "이 후보가 이 기업의 현재 상황에 적합한가?"를 판단할 수 있는 구조를 정의합니다.
@@ -12,7 +14,7 @@
 ┌─────────────────────┐          ┌─────────────────────┐
 │   CompanyContext     │          │  CandidateContext    │
 │                      │          │                      │
-│  - 기업 프로필       │          │  - 경력 (Experience) │
+│  - 기업 프로필       │          │  - 경력 (Chapter)    │
 │  - 성장 단계         │          │  - 역할 성장 궤적    │
 │  - 채용 포지션       │  매칭    │  - 상황 경험 라벨    │
 │  - 운영 방식         │◄────────►│  - 성과 (Outcome)    │
@@ -27,20 +29,28 @@
               │  5개 피처 스코어  │
               │  + confidence    │
               │  + evidence 근거 │
+              └────────┬─────────┘
+                       ▼
+              ┌──────────────────┐
+              │  ranking_score   │
+              │  = overall_match │
+              │  × freshness_wt  │
               └──────────────────┘
 ```
 
 - **CompanyContext**: 기업의 성장 단계, 채용 맥락, 운영 방식 등을 구조화 (JD, NICE 기업정보, 크롤링 등에서 추출)
 - **CandidateContext**: 후보의 경력을 Chapter 단위로 분해하고, 각 Chapter에서 역할/성과/상황 경험을 추출 (이력서에서 추출)
-- **MappingFeatures**: 위 두 Context를 비교하여 5개 적합도 피처를 산출
+- **MappingFeatures**: 위 두 Context를 비교하여 5개 적합도 피처를 산출 → `overall_match_score`
+- **Ranking**: `overall_match_score × freshness_weight`로 최종 `ranking_score` 산출 (v19)
 - **Graph Schema**: 위 데이터를 Neo4j 그래프로 표현하여 탐색 기반 매칭을 지원
 
 ---
 
-## 스키마 문서 구조 (`schema/v10/`)
+## 스키마 문서 구조 (`schema/v19/`)
 
 | # | 파일 | 내용 | 핵심 질문 |
 |---|------|------|-----------|
+| 00 | `00_data_source_mapping.md` | 내부 DB ↔ 온톨로지 매핑 | DB 테이블이 스키마 어디에 대응되는가? |
 | 01 | `01_company_context.md` | 기업 맥락 정의 | 이 기업은 지금 어떤 상황인가? |
 | 02 | `02_candidate_context.md` | 후보 맥락 정의 | 이 후보는 어떤 경험을 해왔는가? |
 | 02 | `02_v4_amendments.md` | 스키마 보완 이력 | v4 이후 어떤 보완이 이루어졌는가? |
@@ -48,6 +58,20 @@
 | 04 | `04_graph_schema.md` | Neo4j 그래프 스키마 | 그래프로 어떻게 표현하는가? |
 | 05 | `05_evaluation_strategy.md` | GraphRAG vs Vector 비교 실험 | GraphRAG가 정말 효과적인가? |
 | 06 | `06_crawling_strategy.md` | 기업 크롤링 전략 | 추가 데이터를 어떻게 수집하는가? |
+
+---
+
+## v19 변경 요약
+
+v18 리뷰(A-) §9.1 즉시 반영 5건에 한정한 최소 변경. 주력은 `02.knowledge_graph` 파일럿 구현으로 전환 권고.
+
+| # | 항목 | 반영 파일 | 요약 |
+|---|------|-----------|------|
+| S-1 | SituationalSignal 경계 가이드 | `02_candidate_context.md` | 모호한 라벨 조합(SCALE_UP vs TEAM_SCALING 등) 판정 기준을 LLM 프롬프트에 인라인 삽입 |
+| S-2 | freshness_weight 적용 지점 | `03_mapping_features.md` | `ranking_score = overall_match_score × freshness_weight` — 피처 품질과 랭킹을 분리 |
+| S-3 | Career ↔ Chapter 매핑 원칙 | `02_candidate_context.md`, `04_graph_schema.md` | "resume-hub Career 레코드 1건 = 1 Chapter" 명문화 |
+| S-4 | README 참조 갱신 | `README.md` | `schema/v16` → `v19`, `vacancy scope_type` → `hiring_context` |
+| S-5 | responsibilities 필드 | `02_candidate_context.md` | Experience JSON 예시에 `responsibilities[]` 추가 |
 
 ---
 
@@ -102,13 +126,25 @@ interface Evidence {
 
 후보의 이력서를 **Experience(Chapter)** 단위로 분해하고 구조화합니다.
 
+### Career ↔ Chapter 매핑 원칙 (v19 S-3)
+
+**"resume-hub Career 레코드 1건 = 1 Chapter"** 를 기본 원칙으로 합니다.
+
+| 상황 | 처리 |
+|------|------|
+| 서로 다른 회사 | 각각 독립 Chapter |
+| 동일 회사, Career 레코드 2건+ | 각각 독립 Chapter (레코드 단위 존중) |
+| 동일 회사 연속 근무 | NEXT_CHAPTER 엣지 `gap_months = 0` |
+
+동일 회사 내 Chapter 시퀀스는 `role_evolution`에서 "동일 회사 내 성장(internal_growth)"으로 인식하며, `PastCompanyContext`는 동일 회사 Chapter 간 공유합니다.
+
 ### Experience 구조
 
 각 경력 항목에서 추출하는 정보:
 
 | 추출 난이도 | 필드 | 설명 |
 |-------------|------|------|
-| 낮음 | company, role_title, period, tech_stack | 이력서에서 직접 추출 |
+| 낮음 | company, role_title, period, tech_stack, responsibilities | 이력서에서 직접 추출 |
 | 중간 | scope_type (IC/LEAD/HEAD/FOUNDER), outcomes, situational_signals | 문맥 해석 필요 |
 | 높음 | failure_recovery, work_style_signals, past_company_context | 추론 또는 외부 데이터 필요 |
 
@@ -122,6 +158,15 @@ interface Evidence {
 | 조직 변화 | `TEAM_BUILDING`, `TEAM_SCALING`, `REORG` | "팀 구축", "n→m명", "조직 개편" |
 | 기술 변화 | `LEGACY_MODERNIZATION`, `NEW_SYSTEM_BUILD` | "리팩토링", "신규 구축" |
 | 비즈니스 | `PMF_SEARCH`, `MONETIZATION` | "PMF", "수익화" |
+
+**경계 가이드 (v19 S-1)**: 모호한 라벨 조합에 대한 판정 기준이 LLM 추출 프롬프트에 인라인으로 포함됩니다.
+
+| 모호한 조합 | 판정 기준 |
+|-------------|-----------|
+| SCALE_UP vs TEAM_SCALING | 조직 전체 성장 → SCALE_UP, 특정 팀/부서 확대 → TEAM_SCALING |
+| NEW_SYSTEM_BUILD vs TECH_STACK_TRANSITION | 없던 시스템 신규 구축 → NEW_SYSTEM_BUILD, 기존 전환 → TECH_STACK_TRANSITION |
+| TEAM_BUILDING vs TEAM_SCALING | 새 팀을 만듦 → TEAM_BUILDING, 기존 팀 확대 → TEAM_SCALING |
+| TURNAROUND vs LEGACY_MODERNIZATION | 사업/조직 회복 → TURNAROUND, 기술/시스템 현대화 → LEGACY_MODERNIZATION |
 
 ### 커리어 수준 분석
 
@@ -149,12 +194,19 @@ CompanyContext와 CandidateContext를 비교하여 **5개 적합도 피처**를 
 
 필수 입력이 null/Unknown이면 해당 피처는 자동으로 `INACTIVE` 상태가 됩니다. 활성화된 피처만으로 `overall_match_score`를 계산하므로, 데이터가 불완전해도 안전하게 동작합니다.
 
-### Overall Score 계산
+### Overall Score → Ranking Score (v19 S-2)
 
 ```
 overall_match_score = 활성 피처의 confidence 가중 평균
                       (비활성 피처의 weight는 활성 피처에 재분배)
+
+ranking_score       = overall_match_score × freshness_weight
 ```
+
+- `overall_match_score`: 피처의 **순수한 적합도 평가** (freshness 미적용)
+- `freshness_weight`: 이력서 갱신 시점에 따른 신선도 가중치 (0.3~1.0)
+  - 90일 이내: 1.0 / 5년+ 미갱신: 0.3
+- `ranking_score`: 최종 랭킹에 사용 — 오래된 이력서의 순위를 하향 조정
 
 ---
 
@@ -193,12 +245,14 @@ graph TB
 | Person | 후보자 | person_id, role_evolution_pattern, primary_domain |
 | Organization | 기업 | name, stage_label, industry_code, employee_count |
 | Chapter | 경험 단위 | scope_type, duration_months, evidence_chunk (+ 벡터) |
-| Vacancy | 채용 포지션 | scope_type, seniority, evidence_chunk (+ 벡터) |
+| Vacancy | 채용 포지션 | hiring_context, seniority, evidence_chunk (+ 벡터) |
 | Role | 역할 | name, category (정규화) |
 | Skill | 기술 | name, category, aliases |
 | Outcome | 성과 | description, outcome_type, metric_value |
 | SituationalSignal | 상황 라벨 | label (14개 taxonomy, 공유 노드) |
 | Industry | 산업 분류 | industry_id (NICE 코드), is_regulated |
+
+> **Chapter 분할 원칙 (v19 S-3)**: "resume-hub Career 레코드 1건 = 1 Chapter". 동일 회사에서 직급/직무 변경으로 Career 레코드가 2건 이상인 경우에도 각각 독립 Chapter로 생성. NEXT_CHAPTER 엣지의 `gap_months = 0`, 동일 Organization 노드 공유.
 
 ### 핵심 그래프 쿼리 패턴
 
@@ -273,7 +327,7 @@ JD + NICE만으로는 채울 수 없는 CompanyContext 필드를 크롤링으로
 
 ## 보완 이력 (`02_v4_amendments.md`)
 
-v4 이후 식별된 보완 사항 8건(A1~A8)의 이력을 관리합니다. A1~A7은 각 통합판 문서에 인라인 반영 완료되었으며, A8(추출 프롬프트 확장 로드맵)은 4단계 추가 일정이 정의되어 있습니다.
+v4 이후 식별된 보완 사항 10건(A1~A10)의 이력을 관리합니다. A1~A7, A9, A10은 각 정본 문서에 인라인 반영 완료되었으며, A8(추출 프롬프트 확장 로드맵)만 활성 콘텐츠로 유지됩니다.
 
 ---
 
@@ -281,12 +335,15 @@ v4 이후 식별된 보완 사항 8건(A1~A8)의 이력을 관리합니다. A1~A
 
 | 용어 | 설명 |
 |------|------|
-| Chapter | 후보의 개별 경력 항목 (Experience 단위) |
+| Chapter | 후보의 개별 경력 항목 — resume-hub Career 레코드 1건 = 1 Chapter (v19) |
 | SituationalSignal | 후보가 경험한 상황 유형 (14개 고정 taxonomy) |
 | scope_type | 역할 범위 — IC(개인 기여자) / LEAD / HEAD / FOUNDER |
-| vacancy scope_type | 채용 맥락 — BUILD_NEW / SCALE_EXISTING / RESET / REPLACE |
+| hiring_context | 채용 맥락 — BUILD_NEW / SCALE_EXISTING / RESET / REPLACE |
 | stage_label | 기업 성장 단계 — EARLY / GROWTH / SCALE / MATURE |
 | Tier | 데이터 소스의 신뢰도 등급 (T1~T7) |
 | confidence | 추출된 정보의 신뢰도 (0.0~1.0, source ceiling 적용) |
+| overall_match_score | 활성 피처의 confidence 가중 평균 (순수 적합도) |
+| ranking_score | overall_match_score × freshness_weight (최종 랭킹용) (v19) |
+| freshness_weight | 이력서 갱신 시점 기반 가중치 (0.3~1.0) (v19) |
 | Graceful Degradation | 데이터 부족 시 해당 피처를 INACTIVE로 두고 나머지로 동작 |
 | NICE | 한국 기업 신용정보 데이터베이스 |
