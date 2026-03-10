@@ -1,0 +1,7 @@
+C4_Component_Layer_RunAPI.md (인증/인가 분리 전략)
+C4_Component_Layer_EP.md (Config 조합 및 멱등성 락/S3 Cross-Account Copy 트리거)
+C4_Component_Layer_RT.md (상태 머신 전환, DLQ 및 EventBridge Scheduler 백오프 발행)
+C4_Component_Layer_Triggers.md (템플릿 기반 SMP 제출 팩토리 + Postprocess 경로)
+C4_Component_Layer_SMP.md (전처리/학습/추론 파이프라인 컴포넌트 구조 및 임계치 Gating)
+C4_Component_Layer_EXP.md (사이즈 기반 다중 파트 업로드 라우팅 및 검증)
+C4_Component_Layer_FailureHandling.md (3-tier 실패 보상 및 수동 액션 처리기)
