@@ -45,11 +45,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 새 버전 디렉토리 생성 (예: `v21/`)
 - README.md의 현재 유효 버전 번호 갱신
 - 이전 버전을 `old/`로 이동하지 않음 (별도 정리 시점에 일괄 이동)
-- 변경 사항은 README.md 내 버전 이력 테이블에 기록
+- 변경 사항은 README.md 내 버전 이력 테이블과 llm_reviews에 기록
 
 ## 관련 외부 시스템
 
-- 설계 완료 문서 이동처: `https://git.jobkorea.co.kr/agentic-services/docs/`
-- Notion 위키: GraphRag 프로젝트 페이지
 - GCP 프로젝트: `graphrag-kg` (Cloud Run Jobs, Neo4j AuraDB, BigQuery, Vertex AI)
-- LLM: Claude Haiku 4.5 (Batch API), text-embedding-005 (Vertex AI)
