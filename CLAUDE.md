@@ -12,9 +12,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 | 디렉토리 | 역할 | 현재 버전 | 포함하는 것 | 포함하면 안 되는 것 |
 |----------|------|-----------|-------------|-------------------|
-| `01.ontology/` | **what to represent** (순수 스키마) | v20 | 필드 정의, 타입, Taxonomy, JSON 스키마, 매핑 규칙, confidence 모델, 논리 그래프 구조 | 구현 코드, 기술 스택, 비용, 파이프라인, 인프라 |
-| `02.knowledge_graph/` | **how to build** (추출/정규화/품질) | v13 | 추출 방법, 정규화 로직, LLM 프롬프트, PII 처리, 데이터 품질, 파이프라인 흐름 | 서빙 방법, 매칭 알고리즘, Neo4j/BQ 구현 |
-| `03.graphrag/` | **how to serve** (구현/배포/평가) | separate/v3 | GCP 구현 계획, Neo4j/BQ 스키마, 비용, 평가, 운영 정책, 서빙 인터페이스 | 순수 온톨로지 정의, 추출 프롬프트 설계 |
+| `01.ontology/` | **what to represent** (순수 스키마) | v26 | 필드 정의, 타입, Taxonomy, JSON 스키마, 매핑 규칙, confidence 모델, 논리 그래프 구조 | 구현 코드, 기술 스택, 비용, 파이프라인, 인프라 |
+| `02.knowledge_graph/` | **how to build** (추출/정규화/품질) | v18 | 추출 방법, 정규화 로직, LLM 프롬프트, PII 처리, 데이터 품질, 파이프라인 흐름 | 서빙 방법, 매칭 알고리즘, Neo4j/BQ 구현 |
+| `03.graphrag/` | **how to serve** (구현/배포/평가) | separate/v8 | GCP 구현 계획, Neo4j/BQ 스키마, 비용, 평가, 운영 정책, 서빙 인터페이스 | 순수 온톨로지 정의, 추출 프롬프트 설계 |
 
 ## 핵심 도메인 개념
 
@@ -26,9 +26,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 디렉토리 구조 규칙
 
-- 각 디렉토리의 최신 버전만 활성 문서 (`v20/`, `v13/`, `separate/v3/`)
+- 각 디렉토리의 최신 버전만 활성 문서 (`v26/`, `v18/`, `separate/v8/`)
 - `old/` 폴더: 이전 버전 아카이브 (참조만, 수정 금지)
-- `llm_log/`: LLM 리뷰/응답 이력 (참조용)
+- `llm_log/`: LLM 리뷰/응답 이력, `10.ml_pipeline 전용` (참조용)
 - `llm_reviews/`: 디렉토리별 리뷰, changelog, 개선 계획
 
 ## 문서 작성 원칙
